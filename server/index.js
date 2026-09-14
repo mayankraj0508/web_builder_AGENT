@@ -29,7 +29,14 @@ import { initGemini } from "../src/utils/gemini.js";
 import projectRoutes from "./routes/projects.js";
 import { initWebSocket } from "./ws/handler.js";
 
-const PORT = process.env.SERVER_PORT || 3000;
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 // ─── Express App ─────────────────────────────────────────────
@@ -37,7 +44,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const app = express();
 
 // Middleware
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 
 // Request logging
@@ -61,6 +68,16 @@ app.get("/api/health", (req, res) => {
 // Project routes
 app.use("/api/projects", projectRoutes);
 
+// Serve static frontend build if dist folder exists
+const distPath = path.join(__dirname, "../dashboard/dist");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
+
 // ─── HTTP + WebSocket Server ─────────────────────────────────
 
 const server = createServer(app);
@@ -79,8 +96,8 @@ async function start() {
   console.log("");
   console.log("╔══════════════════════════════════════════════════════════╗");
   console.log("║                                                          ║");
-  console.log("║   🤖  AI DEV TEAM — Mission Control Server              ║");
-  console.log("║   Phase 7: Web Dashboard                                 ║");
+  console.log("║   🤖  WEBAI — Mission Control Server                    ║");
+  console.log("║   Multi-Agent Cloud & Local Deployment                   ║");
   console.log("║                                                          ║");
   console.log("╚══════════════════════════════════════════════════════════╝");
   console.log("");
@@ -98,9 +115,9 @@ async function start() {
   server.listen(PORT, () => {
     console.log(`   ✅ REST API:    http://localhost:${PORT}/api`);
     console.log(`   ✅ WebSocket:   ws://localhost:${PORT}/ws`);
-    console.log(`   ✅ Frontend:    ${FRONTEND_URL}`);
+    console.log(`   ✅ Frontend:    ${fs.existsSync(distPath) ? `http://localhost:${PORT}` : FRONTEND_URL}`);
     console.log("");
-    console.log("   Waiting for dashboard connections...");
+    console.log("   Waiting for connections...");
     console.log("");
   });
 }
