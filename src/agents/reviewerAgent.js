@@ -1,27 +1,8 @@
-/**
- * reviewerAgent.js — Code Reviewer
- * 
- * FIRST PRINCIPLES:
- * The Coder writes code, but LLMs make mistakes — wrong imports,
- * missing error handling, inconsistent patterns. The Reviewer catches
- * these BEFORE execution, saving expensive debug cycles.
- * 
- * Think of it as a senior dev doing code review before merging a PR.
- * 
- * MAX 2 REJECTION CYCLES:
- * If reviewer rejects 3 times, the task goes to simplifyTask — the
- * task gets broken into smaller pieces instead of infinite retry loops.
- */
-
 import { safeCallGemini, callGemini, makeTokenDelta, emptyTokenDelta } from "../utils/gemini.js";
 import { readFile } from "../utils/sandboxManager.js";
-
 const REVIEWER_PROMPT = `You are the Reviewer Agent in an AI software development team.
-
 ROLE: Senior code reviewer. Last gate before code runs.
-
 GOAL: Review for correctness and consistency. Approve or reject with actionable feedback.
-
 REVIEW CHECKLIST:
 1. IMPORTS: Do imports use EXACT importStatements from dependencies? Are relative paths correct? Is .js extension included?
 2. EXPORTS: Does the file export what the interface says? Named vs default correct?
@@ -34,27 +15,22 @@ REVIEW CHECKLIST:
 9. MODEL RETURNS: Do models return clean data (not raw { rows })? Does caller handle null/undefined?
 10. SECURITY: Parameterized queries? No hardcoded secrets? Proper password hashing?
 11. COMPLETENESS: Does it meet acceptance criteria?
-
 OUTPUT FORMAT (strict JSON):
 {
   "verdict": "approved" | "rejected",
   "issues": ["Specific issue 1", "Specific issue 2"],
   "summary": "One-line summary"
 }
-
 RULES:
 - If approved, issues should be empty or minor suggestions.
 - If rejected, issues MUST be specific and actionable — include exact line/code to fix.
 - Be practical. Don't reject for style preferences — only bugs, security, or missing functionality.
 - If code is 90% correct with minor issues, APPROVE with suggestions.
 - NEVER reject for missing features that are in a DIFFERENT task.`;
-
 export async function reviewerAgentNode(state) {
   const currentCycle = state.reviewResult?.reviewCycle || 0;
   console.log(`\n🔍 [Reviewer] Reviewing code (cycle ${currentCycle + 1}/3)...\n`);
-
   const { currentTask, coderOutput, sandboxId, contextPackage } = state;
-
   if (!currentTask || !coderOutput?.files?.length) {
     // If coder returned an error, reject so it routes back for retry
     if (coderOutput?.error) {
@@ -64,21 +40,18 @@ export async function reviewerAgentNode(state) {
     console.log("   Nothing to review — skipping");
     return { reviewResult: { verdict: "approved", issues: [], reviewCycle: 0 } };
   }
-
   // Read actual code from sandbox
   let codeContent = "";
   for (const file of coderOutput.files) {
     try {
       const content = readFile(sandboxId, file.path);
       if (content) codeContent += `\n--- ${file.path} ---\n${content}\n`;
-    } catch (e) { /* file might not exist */ }
+    } catch (e) {  }
   }
-
   let userPrompt = `TASK: ${currentTask.title}\n`;
   userPrompt += `DESCRIPTION: ${currentTask.description || ""}\n\n`;
   userPrompt += `ACCEPTANCE CRITERIA:\n${(currentTask.acceptanceCriteria || []).map(c => `  ✓ ${c}`).join("\n")}\n\n`;
   userPrompt += `CODE TO REVIEW:\n${codeContent}\n`;
-
   // Add patterns for consistency check
   const patterns = contextPackage?.patterns || {};
   const hasPatterns = Object.values(patterns).some(v => v && v.length > 0);
@@ -88,7 +61,6 @@ export async function reviewerAgentNode(state) {
       if (value) userPrompt += `  ${key}: ${value}\n`;
     }
   }
-
   const result = await safeCallGemini({
     systemPrompt: REVIEWER_PROMPT,
     userPrompt,
@@ -96,24 +68,19 @@ export async function reviewerAgentNode(state) {
     currentCost: state.tokenUsage?.estimatedCost || 0,
     tokenBudget: state.tokenBudget,
   });
-
-
   if (!result.ok) {
     console.error(`   [reviewerAgent] LLM failed: ${result.error}`);
     return { error: `reviewerAgent failed: ${result.error}`, tokenUsage: emptyTokenDelta("reviewerAgent") };
   }
-
   const review = result.parsed;
   const verdict = review.verdict || "approved";
   const issues = review.issues || [];
-
   if (verdict === "approved") {
     console.log(`   ✅ APPROVED: ${review.summary || "Code looks good"}`);
   } else {
     console.log(`   ❌ REJECTED: ${review.summary || "Issues found"}`);
     issues.forEach(i => console.log(`   • ${i}`));
   }
-
   return {
     reviewResult: {
       verdict,
@@ -124,13 +91,8 @@ export async function reviewerAgentNode(state) {
     tokenUsage: makeTokenDelta("reviewerAgent", result.tokens),
   };
 }
-
-/**
- * Router: approved → executor, rejected (≤2) → contextBuilder (refreshes context), rejected (>2) → simplifyTask
- */
 export function reviewerRouter(state) {
   const { verdict, reviewCycle } = state.reviewResult || {};
-
   if (verdict === "approved") return "executorAgent";
   if (reviewCycle >= 3) return "simplifyTask";
   return "contextBuilder"; // Retry with FRESH context

@@ -1,26 +1,42 @@
 # 🤖 WebAI — Autonomous Multi-Agent Software Development System
 
-WebAI is an end-to-end autonomous multi-agent software engineering system built with **LangGraph**, **Google Gemini**, **Express**, and a **Vite + React Mission Control Dashboard**. It takes high-level user requirements, clarifies ambiguities through human-in-the-loop interaction, generates technical specifications and multi-tier architectural blueprints, creates task execution plans, writes production code, tests execution in isolated sandboxes, and performs automated debugging loops.
+> **An end-to-end, multi-agent AI software engineering platform powered by LangGraph, Google Gemini 3, AWS Open-Source SDKs, Express REST/WebSockets, and a Vite + React Mission Control Dashboard.**
+
+WebAI transforms high-level prompts into fully realized, multi-tier software applications. It manages the complete development lifecycle: clarifying ambiguities via human-in-the-loop interactions, generating technical specs, designing system blueprints, planning tasks, writing production code, executing tests in isolated sandboxes, and running self-healing debugging loops.
 
 ---
 
-## 🌟 Key Capabilities
+## 🌟 Key Features & Capabilities
 
-- **Autonomous End-to-End Pipeline**: Transforms a single prompt into a structured project specification, architecture blueprint, source code files, and verified executable output.
-- **Multi-Agent Orchestration**: Specialized agents handle product management, system architecture, blueprint validation, task planning, code generation, code review, sandbox execution, and automated debugging.
-- **State Machine with LangGraph**: Built on `@langchain/langgraph` using a directed state graph with state persistence (Redis or In-Memory checkpointer).
-- **Human-in-the-Loop Q&A**: Pauses execution when requirement ambiguities are detected, soliciting user input via CLI or Web UI before resuming.
-- **Isolated Directory Sandbox**: Safely provisions workspaces under `sandboxes/`, writes code, executes scripts, and captures runtime outputs/logs.
-- **Dual User Interfaces**:
-  - **Terminal CLI**: Interactive command-line workflow (`node src/index.js`).
-  - **Web Dashboard**: Full-stack Mission Control interface built with Express, WebSockets, Vite, React, and Zustand (`npm run dev`).
-- **Token & Cost Tracking**: Monitors prompt and completion token usage for every Gemini API call and presents live budget reports.
+- **🤖 Multi-Agent Autonomous Pipeline**:
+  - **PM Agent**: Refines requirements, identifies ambiguities, and interacts with users via Human-in-the-Loop.
+  - **Architect Agent**: Generates system blueprints, directory structures, and database schemas.
+  - **Blueprint Validator**: Validates architectural consistency and file boundaries before execution.
+  - **Planner Agent**: Generates dependency-ordered task breakdown lists.
+  - **Coder Agent**: Writes clean, modular ES module code across backend and frontend layers.
+  - **Reviewer Agent**: Conducts automated code quality and security reviews.
+  - **Executor & Debugger Agents**: Executes tests in isolated sandboxes and performs self-healing bug fixes.
+
+- **⚡ Modern AI Model Integration**:
+  - Powered by **Google Gemini 3** (`gemini-3.6-flash`, `gemini-3.5-flash-lite`).
+  - Automatic exponential backoff, rate limit handling, and model fallback.
+  - Native **AWS Open-Source SDK** integration (`@aws-sdk/client-bedrock-runtime`, `@aws-sdk/client-s3`) with LocalStack support for local open-source execution.
+
+- **📊 Mission Control Dashboard**:
+  - Full-stack web interface built with **Vite, React 18, Zustand, and Tailwind CSS**.
+  - **Real-Time Streaming**: WebSocket event stream (`ws://localhost:3000/ws`) for node execution, agent logs, and live code preview.
+  - **Token & Cost Tracking**: Live budget consumption indicators and token usage analytics.
+
+- **🐳 Dockerized Sandbox Execution**:
+  - Automatically provisions isolated sandbox workspaces under `sandboxes/`.
+  - Configures PostgreSQL, Node.js API, and Nginx containers with automated database migrations on boot.
+  - State persistence backed by Redis (`aidev-redis`) or in-memory fallback checkpointer (`MemorySaver`).
 
 ---
 
 ## 🏗️ System Architecture & Workflow Graph
 
-```
+```text
                    ┌───────────────────────────────────────┐
                    │                 START                 │
                    └──────────────────┬────────────────────┘
@@ -57,131 +73,83 @@ WebAI is an end-to-end autonomous multi-agent software engineering system built 
                                       │
                                       ▼
                              ┌─────────────────┐
-                             │sandboxHealthCheck│
-                             └────────┬────────┘
-                                      │
-                                      ▼
-                        ┌────────────────────────────┐
-                        │   DEVELOPMENT LOOP (Tasks) │
-                        └─────────────┬──────────────┘
-                                      │
-  ┌───────────────────────────────────┼──────────────────────────────────┐
-  │                                   ▼                                  │
-  │                          ┌─────────────────┐                         │
-  │                          │ selectNextTask  │                         │
-  │                          └────────┬────────┘                         │
-  │                                   │                                  │
-  │                                   ▼                                  │
-  │                          ┌─────────────────┐                         │
-  │                          │ contextBuilder  │                         │
-  │                          └────────┬────────┘                         │
-  │                                   │                                  │
-  │                                   ▼                                  │
-  │                          ┌─────────────────┐                         │
-  │                          │   coderAgent    │                         │
-  │                          └────────┬────────┘                         │
-  │                                   │                                  │
-  │                                   ▼                                  │
-  │                          ┌─────────────────┐                         │
-  │                          │  reviewerAgent  │                         │
-  │                          └────────┬────────┘                         │
-  │                                   │                                  │
-  │                                   ▼                                  │
-  │                          ┌─────────────────┐                         │
-  │                          │ executorAgent   │                         │
-  │                          └────────┬────────┘                         │
-  │                                   │                                  │
-  │                  ┌────────────────┴────────────────┐                 │
-  │                  │ (Success)             (Failure) │                 │
-  │                  ▼                                 ▼                 │
-  │         ┌─────────────────┐               ┌─────────────────┐        │
-  │         │ updateRegistry  │               │ debuggerAgent / │        │
-  │         └────────┬────────┘               │  simplifyTask   │        │
-  │                  │                        └────────┬────────┘        │
-  │                  │                                 │                 │
-  └──────────────────┴─────────────────────────────────┴─────────────────┘
-                                      │ (All tasks complete)
-                                      ▼
-                             ┌─────────────────┐
-                             │assembleEntryPoints│
-                             └────────┬────────┘
-                                      │
-                                      ▼
-                             ┌─────────────────┐
-                             │deploymentVerifier│
-                             └────────┬────────┘
-                                      │
-                                      ▼
-                             ┌─────────────────┐
-                             │  presentToUser  │
-                             └────────┬────────┘
-                                      │
-                                      ▼
-                   ┌───────────────────────────────────────┐
-                   │                  END                  │
-                   └───────────────────────────────────────┘
+                             │ selectNextTask  │◄─────────────────┐
+                             └────────┬────────┘                  │
+                                      │                           │
+                                      ▼                           │
+                             ┌─────────────────┐                  │
+                             │   coderAgent    │                  │
+                             └────────┬────────┘                  │
+                                      │                           │
+                                      ▼                           │
+                             ┌─────────────────┐                  │
+                             │  reviewerAgent  │                  │
+                             └────────┬────────┘                  │
+                                      │                           │
+                                      ▼                           │
+                             ┌─────────────────┐                  │
+                             │  executorAgent  │                  │
+                             └────────┬────────┘                  │
+                                      │                           │
+                        ┌─────────────┴─────────────┐             │
+                        │                           │             │
+                (test passed)                (test failed)        │
+                        │                           │             │
+                        ▼                           ▼             │
+             ┌─────────────────────┐     ┌─────────────────────┐  │
+             │ assembleEntryPoints │     │    debuggerAgent    │──┘
+             └──────────┬──────────┘     └─────────────────────┘
+                        │
+                        ▼
+             ┌─────────────────────┐
+             │    presentToUser    │
+             └─────────────────────┘
 ```
 
 ---
 
-## 🧩 Agent & Node Roles
+## 🛠️ Technology Stack
 
-### Agents (`src/agents/`)
-- **`pmAgent.js`**: Analyzes the raw prompt. Asks clarifying questions if vague or outputs a structured JSON specification.
-- **`architectAgent.js`**: Generates multi-tiered technical architecture (database schemas, REST API endpoints, frontend pages, folder layout).
-- **`blueprintValidator.js`**: Audits the generated architecture blueprint for consistency and schema completeness.
-- **`plannerAgent.js`**: Converts the validated specification and blueprint into an ordered task execution queue.
-- **`coderAgent.js`**: Reads task specs and context snippets to write production code files.
-- **`reviewerAgent.js`**: Reviews written code for syntax errors, missing dependencies, or logic flaws.
-- **`executorAgent.js`**: Executes generated scripts or shell commands inside the sandbox environment.
-- **`debuggerAgent.js`**: Diagnoses runtime failures, analyzes error logs, and applies targeted code fixes.
-
-### Nodes (`src/nodes/`)
-- **`humanInput.js`**: Interactively prompts user in terminal or web UI during execution pauses.
-- **`setupSandbox.js`**: Initializes workspace directory structure under `sandboxes/`.
-- **`sandboxHealthCheck.js`**: Confirms directory permissions and execution availability.
-- **`selectNextTask.js`**: Picks the next pending task from the state queue.
-- **`contextBuilder.js`**: Gathers file snippets and dependencies relevant to the active task.
-- **`simplifyTask.js`**: Decomposes complex failing tasks into smaller sub-tasks.
-- **`updateRegistry.js`**: Registers generated module exports into state registry.
-- **`snapshotManager.js`**: Saves workspace states for rollback/recovery.
-- **`stateCompactor.js`**: Trims conversation and log history to optimize LLM token context windows.
-- **`patternExtractor.js`**: Extracts reusable coding patterns across iterations.
-- **`assembleEntryPoints.js`**: Links modular files together with main execution entry points.
-- **`deploymentVerifier.js`**: Performs final health and readiness checks.
-- **`presentToUser.js`**: Formats final output and metrics report for presentation.
+- **AI Runtimes**: Google Gemini 3 (`@google/genai`), AWS Open-Source SDK (`@aws-sdk/client-bedrock-runtime`, `@aws-sdk/client-s3`)
+- **State Machine**: LangGraph (`@langchain/langgraph`, `@langchain/langgraph-checkpoint-redis`)
+- **Backend API**: Node.js, Express, WebSockets (`ws`), dotenv, cors
+- **Frontend UI**: React 18, Vite, Tailwind CSS, Zustand, Lucide React
+- **Infrastructure**: Docker, Docker Compose, Redis, Nginx Alpine, PostgreSQL 16
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Environment Setup & Installation
 
 ### 1. Prerequisites
 - **Node.js**: v18.0.0 or higher
-- **Gemini API Key**: [Get a Gemini API Key](https://aistudio.google.com/apikey)
-- **Redis (Optional)**: For persistent state checkpointer (`docker run -d -p 6379:6379 redis:latest`)
+- **Docker Desktop**: Recommended for Redis checkpoint persistence and sandbox container execution
 
-### 2. Installation
+### 2. Install Dependencies
+
 ```bash
-# Clone the repository
-git clone https://github.com/nikhilgetitdone2027/WebAI.git
-cd WebAI
-
-# Install root dependencies
+# Install root backend dependencies
 npm install
 
-# Install dashboard dependencies
+# Install dashboard frontend dependencies
 cd dashboard && npm install && cd ..
 ```
 
 ### 3. Environment Configuration
 Create a `.env` file in the root directory:
+
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.6-flash
+
 REDIS_URL=redis://localhost:6379
 SERVER_PORT=3000
 FRONTEND_URL=http://localhost:5173
 TOKEN_BUDGET=2.0
+
+# AWS Open-Source Stack (Local Integration)
+AWS_REGION=us-east-1
+AWS_ENDPOINT_URL=http://localhost:4566
+AWS_S3_BUCKET_NAME=webai-local-sandboxes
 ```
 
 ---
@@ -190,96 +158,62 @@ TOKEN_BUDGET=2.0
 
 ### Option A: Web Mission Control Dashboard (Recommended)
 Start the Express backend server and Vite React frontend concurrently:
+
 ```bash
 npm run dev
 ```
-- **Web Dashboard UI**: Open `http://localhost:5173`
+- **Web Dashboard UI**: Navigate to `http://localhost:5173`
 - **Backend API**: Running on `http://localhost:3000`
 
 ### Option B: Terminal CLI Mode
-Run the pipeline directly from your command line:
-```bash
-# Pass requirement directly
-node src/index.js "Build a task management application with user authentication"
+Run the multi-agent pipeline directly in your terminal:
 
-# Or run interactive prompt mode
+```bash
 npm start
 ```
 
 ---
 
-## 🧪 Testing Suite
+## 🧪 Running Tests
 
-Run unit and integration test scripts to verify state graphs, agent prompts, and sandboxes:
+WebAI contains automated integration test suites for core agents and pipeline nodes:
 
 ```bash
-# Test 1: Graph skeleton flow with mock nodes (No API key required)
-npm run test:graph
-
-# Test 2: PM Agent with live Gemini API
-npm run test:pm
-
-# Test 3: Architect Agent blueprint generation
-npm run test:architect
-
-# Test 4: Architecture Blueprint Validator
-npm run test:validator
-
-# Test 5: Planner Agent task decomposition
-npm run test:planner
-
-# Test 6: Sandbox manager execution & filesystem operations
-npm run test:sandbox
-
-# Test 7: Full development loop (Coder + Reviewer + Executor + Debugger)
-npm run test:devloop
-
-# Test 8: Run all mock tests sequentially
+# Run all mock integration tests
 npm run test:all:mock
+
+# Test specific individual modules
+npm run test:graph
+npm run test:pm
+npm run test:architect
+npm run test:planner
+npm run test:validator
+npm run test:sandbox
+npm run test:devloop
 ```
 
 ---
 
-## 📁 Project Structure
+## 📡 API & WebSocket Specifications
 
-```
-WebAI/
-├── src/                      # Core Multi-Agent & LangGraph Logic
-│   ├── index.js              # CLI Entry Point
-│   ├── agents/               # Autonomous LLM Agents (PM, Architect, Planner, Coder, etc.)
-│   ├── nodes/                # Workflow Nodes & Helper Step Handlers
-│   ├── config/               # LangGraph Graph Setup & State Definition
-│   └── utils/                # Gemini API Wrapper, Token Tracker, Sandbox Manager, Redis
-├── server/                   # Backend Server Infrastructure
-│   ├── index.js              # Express REST & WebSocket Server Entry Point
-│   ├── routes/               # API Routes (/api/projects)
-│   ├── services/             # Graph Runner & Execution Controller
-│   └── ws/                   # WebSocket Handler for Real-Time Streaming
-├── dashboard/                # Frontend Mission Control Web Application
-│   ├── src/                  # React Components, Hooks, State Store (Zustand)
-│   ├── index.html            # Single Page Application Entry Point
-│   └── vite.config.js        # Vite Build Configuration
-├── tests/                    # Comprehensive Integration Test Suite
-├── sandboxes/                # Dynamically Generated Workspace Environments
-├── .gitignore                # Git Ignore Configuration
-├── package.json              # Root Project Dependencies & Scripts
-└── README.md                 # Project Documentation
-```
+### REST API Endpoints (`server/routes/projects.js`)
+- `POST /api/projects`: Start a new multi-agent project run.
+- `GET /api/projects`: List active and historical project runs.
+- `GET /api/projects/:id`: Fetch project checkpoint state.
+- `POST /api/projects/:id/resume`: Resume execution after human input.
+- `POST /api/projects/:id/cancel`: Cancel an active run.
 
----
-
-## 📡 API & WebSocket Protocols
-
-### REST Endpoints (`server/routes/projects.js`)
-- `POST /api/projects`: Starts a new execution workflow with `{ requirement: string }`.
-- `POST /api/projects/:id/resume`: Resumes a checkpointed project workflow.
-- `GET /api/projects/:id`: Fetches current project state, logs, and token usage summary.
-
-### WebSocket Events (`server/ws/handler.js`)
+### WebSocket Protocol (`server/ws/handler.js`)
 - **Client → Server**:
-  - `{ type: "human_response", data: { answers: [...] } }`: Sends user answers to clear state pause.
+  - `{ type: "human_response", data: { answers: [...] } }`: Resolves pending clarification questions.
   - `{ type: "cancel" }`: Aborts the active pipeline run.
 - **Server → Client**:
-  - `{ type: "state_update" }`: Pushes latest state snapshot & node progression.
-  - `{ type: "log" }`: Streams live agent execution and log lines.
-  - `{ type: "human_input_request" }`: Requests user input when PM agent asks clarifying questions.
+  - `{ type: "state_update" }`: Pushes active node updates and state snapshots.
+  - `{ type: "log" }`: Streams real-time agent output and log lines.
+  - `{ type: "human_input_request" }`: Triggers human-in-the-loop prompt modal in UI.
+
+---
+
+## 📝 License
+
+Distributed under the MIT License. See `LICENSE` for details.

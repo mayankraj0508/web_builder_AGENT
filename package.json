@@ -19,9 +19,11 @@
     "test:all:mock": "node tests/test-graph-skeleton.js && node tests/test-validator.js && node tests/test-sandbox.js && node tests/test-devloop.js"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1136.0",
+    "@aws-sdk/client-s3": "^3.1136.0",
+    "@google/genai": "^1.43.0",
     "@langchain/langgraph": "^1.2.0",
     "@langchain/langgraph-checkpoint-redis": "^1.0.1",
-    "@google/genai": "^1.43.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",

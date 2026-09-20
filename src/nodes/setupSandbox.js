@@ -1,20 +1,4 @@
-/**
- * setupSandbox.js — Creates complete Docker environment
- * 
- * Passes the Architect's dbSchema to sandboxManager so that:
- * - Database container starts with correct image
- * - Tables are created from the schema
- * - Backend has DATABASE_URL set
- * - Frontend has VITE_API_URL set
- */
-
 import { createSandbox } from "../utils/sandboxManager.js";
-
-/**
- * Pre-built registry entries for scaffold files.
- * These are DETERMINISTIC — we wrote these files, we know their exports.
- * No LLM needed. Every coder call will see these exact import statements.
- */
 function getScaffoldRegistry(dbType) {
   return [
     {
@@ -77,22 +61,16 @@ function getScaffoldRegistry(dbType) {
     },
   ];
 }
-
 export async function setupSandboxNode(state) {
   console.log("\n[Setup Sandbox] Creating project workspace...\n");
-
   const { folderStructure, dependencies, dbSchema } = state.blueprint;
-
   try {
     const sandboxId = await createSandbox(folderStructure, dependencies, dbSchema);
     const dbType = dependencies?.backend?.dependencies?.mongoose ? "mongo" : "postgres";
-
     console.log(`\n   Sandbox created: ${sandboxId}`);
-
     // Seed registry with scaffold file interfaces
     const scaffoldRegistry = getScaffoldRegistry(dbType);
     console.log(`   Registry seeded: ${scaffoldRegistry.length} scaffold files indexed`);
-
     return {
       sandboxId,
       currentPhase: "sandbox",

@@ -1,17 +1,9 @@
-/**
- * HumanInputPanel.jsx — Human-in-the-Loop
- * No emojis. Clean, urgent styling with border accent.
- */
-
 import { useState } from "react";
-
 export default function HumanInputPanel({ request, onSubmit }) {
   const [answer, setAnswer] = useState("");
   const [escalationChoice, setEscalationChoice] = useState(null);
   const [guidance, setGuidance] = useState("");
-
   if (!request) return null;
-
   if (request.type === "pm_clarification") {
     return (
       <div className="human-panel">
@@ -53,7 +45,6 @@ export default function HumanInputPanel({ request, onSubmit }) {
       </div>
     );
   }
-
   if (request.type === "escalation") {
     return (
       <div className="human-panel human-panel--danger">
@@ -76,7 +67,6 @@ export default function HumanInputPanel({ request, onSubmit }) {
               </div>
             )}
           </div>
-
           <div className="escalation-choices">
             <button
               className={`choice-btn ${escalationChoice === "guide" ? "choice--selected" : ""}`}
@@ -106,7 +96,6 @@ export default function HumanInputPanel({ request, onSubmit }) {
               <span className="choice-desc">Reduce feature scope</span>
             </button>
           </div>
-
           {escalationChoice === "guide" && (
             <div className="answer-block">
               <textarea
@@ -135,6 +124,5 @@ export default function HumanInputPanel({ request, onSubmit }) {
       </div>
     );
   }
-
   return null;
 }

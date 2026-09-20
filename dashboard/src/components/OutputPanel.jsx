@@ -1,11 +1,5 @@
-/**
- * OutputPanel.jsx — Tabbed Output Display
- * No emojis. Clean tabs. Code-style output rendering.
- */
-
 import { useState } from "react";
 import useProjectStore from "../store/projectStore";
-
 const TABS = [
   { key: "spec", label: "Spec" },
   { key: "blueprint", label: "Blueprint" },
@@ -13,7 +7,6 @@ const TABS = [
   { key: "code", label: "Code" },
   { key: "final", label: "Result" },
 ];
-
 export default function OutputPanel() {
   const [activeTab, setActiveTab] = useState("spec");
   const spec = useProjectStore((s) => s.spec);
@@ -23,14 +16,12 @@ export default function OutputPanel() {
   const taskStatuses = useProjectStore((s) => s.taskStatuses);
   const coderOutput = useProjectStore((s) => s.coderOutput);
   const finalState = useProjectStore((s) => s.finalState);
-
   return (
     <div className="panel output-panel">
       <div className="panel-head">
         <span className="panel-tag">OUT</span>
         <span className="panel-title">Output</span>
       </div>
-
       <div className="tab-row">
         {TABS.map((tab) => (
           <button
@@ -42,7 +33,6 @@ export default function OutputPanel() {
           </button>
         ))}
       </div>
-
       <div className="output-body">
         {activeTab === "spec" && <SpecView spec={spec} />}
         {activeTab === "blueprint" && (
@@ -57,16 +47,13 @@ export default function OutputPanel() {
     </div>
   );
 }
-
 function SpecView({ spec }) {
   if (!spec) return <Empty text="Spec appears after PM completes" />;
   return <pre className="code-block">{JSON.stringify(spec, null, 2)}</pre>;
 }
-
 function BlueprintView({ blueprint, validation }) {
   if (!blueprint?.entities?.length)
     return <Empty text="Blueprint appears after Architect completes" />;
-
   return (
     <div className="output-section">
       {validation && (
@@ -75,7 +62,6 @@ function BlueprintView({ blueprint, validation }) {
           {validation.validationCycles > 0 && ` // ${validation.validationCycles} cycles`}
         </div>
       )}
-
       <h4 className="section-heading">Entities [{blueprint.entities.length}]</h4>
       {blueprint.entities.map((e, i) => (
         <div key={i} className="list-item">
@@ -83,7 +69,6 @@ function BlueprintView({ blueprint, validation }) {
           {e.description && <span className="list-val">{e.description}</span>}
         </div>
       ))}
-
       {blueprint.apiEndpoints?.length > 0 && (
         <>
           <h4 className="section-heading">Endpoints [{blueprint.apiEndpoints.length}]</h4>
@@ -98,7 +83,6 @@ function BlueprintView({ blueprint, validation }) {
           ))}
         </>
       )}
-
       {blueprint.frontendPages?.length > 0 && (
         <>
           <h4 className="section-heading">Pages [{blueprint.frontendPages.length}]</h4>
@@ -113,15 +97,12 @@ function BlueprintView({ blueprint, validation }) {
     </div>
   );
 }
-
 function TasksView({ taskQueue, taskStatuses }) {
   if (!taskQueue?.phases?.length)
     return <Empty text="Tasks appear after Planner completes" />;
-
   const total = taskQueue.phases.reduce((s, p) => s + (p.tasks?.length || 0), 0);
   const done = Object.values(taskStatuses).filter((s) => s === "done").length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
   return (
     <div className="output-section">
       <div className="progress-header">
@@ -131,7 +112,6 @@ function TasksView({ taskQueue, taskStatuses }) {
       <div className="progress-track">
         <div className="progress-fill" style={{ width: `${pct}%` }} />
       </div>
-
       {taskQueue.phases.map((phase, pi) => (
         <div key={pi} className="task-group">
           <h4 className="section-heading">
@@ -154,12 +134,10 @@ function TasksView({ taskQueue, taskStatuses }) {
     </div>
   );
 }
-
 function CodeView({ coderOutput }) {
   if (!coderOutput) return <Empty text="Code output appears during dev loop" />;
   return <pre className="code-block">{JSON.stringify(coderOutput, null, 2)}</pre>;
 }
-
 function FinalView({ finalState }) {
   if (!finalState) return <Empty text="Final result appears on completion" />;
   return (
@@ -184,7 +162,6 @@ function FinalView({ finalState }) {
     </div>
   );
 }
-
 function Empty({ text }) {
   return <div className="empty-state">{text}</div>;
 }

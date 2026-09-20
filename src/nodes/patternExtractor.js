@@ -1,25 +1,7 @@
-/**
- * patternExtractor.js — Code Pattern Extractor ⭐ V2 NEW
- * 
- * FIRST PRINCIPLES:
- * Phase 1 code establishes conventions: how errors are handled,
- * how responses are formatted, what import style is used.
- * Phase 2+ code MUST follow these same conventions.
- * 
- * The pattern extractor reads Phase N's code and distills it into
- * a short description that future Coder calls receive as context.
- * 
- * This is what prevents "style drift" — where the AI starts writing
- * camelCase in Phase 1 and switches to snake_case in Phase 3.
- */
-
 import { safeCallGemini, callGemini, makeTokenDelta, emptyTokenDelta } from "../utils/gemini.js";
 import { readFile, getFileList } from "../utils/sandboxManager.js";
-
 const PATTERN_PROMPT = `You are analyzing code files to extract exact coding patterns. Be VERY specific — include actual code snippets, not descriptions.
-
 Extract these patterns:
-
 OUTPUT FORMAT (strict JSON):
 {
   "errorHandling": "try { ... } catch(err) { res.status(500).json({ success: false, message: err.message }) }",
@@ -33,33 +15,26 @@ OUTPUT FORMAT (strict JSON):
   "asyncPattern": "All DB/API functions are async, always called with await",
   "frontendApiPattern": "axios.get/post with baseURL from import.meta.env.VITE_API_URL, token in Authorization header"
 }
-
 RULES:
 - Each value should be a SHORT code example or exact pattern, not a vague description
 - If a pattern isn't established yet, use empty string ""
 - Be precise enough that another developer can follow it exactly`;
-
 export async function patternExtractorNode(state) {
   console.log("\n🎨 [Pattern Extractor] Analyzing code patterns...\n");
-
   const { sandboxId } = state;
-
   if (!sandboxId) {
     console.log("   ⚠️ No sandbox");
     return {};
   }
-
   // Read recent code files
   const allFiles = getFileList(sandboxId);
   const codeFiles = allFiles.filter(f => 
     (f.endsWith(".js") || f.endsWith(".jsx")) && !f.includes("node_modules")
   ).slice(0, 8); // Max 8 files to keep tokens low
-
   if (codeFiles.length === 0) {
     console.log("   ⚠️ No code files to analyze");
     return {};
   }
-
   let codeContent = "";
   for (const filePath of codeFiles) {
     try {
@@ -68,9 +43,8 @@ export async function patternExtractorNode(state) {
         const truncated = content.split("\n").slice(0, 40).join("\n");
         codeContent += `\n--- ${filePath} ---\n${truncated}\n`;
       }
-    } catch (e) { /* skip */ }
+    } catch (e) {  }
   }
-
   const result = await safeCallGemini({
     systemPrompt: PATTERN_PROMPT,
     userPrompt: codeContent,
@@ -78,20 +52,15 @@ export async function patternExtractorNode(state) {
     currentCost: state.tokenUsage?.estimatedCost || 0,
     tokenBudget: state.tokenBudget,
   });
-
-
   if (!result.ok) {
     console.error(`   [patternExtractor] LLM failed: ${result.error}`);
     return { error: `patternExtractor failed: ${result.error}`, tokenUsage: emptyTokenDelta("patternExtractor") };
   }
-
   const patterns = result.parsed;
-
   console.log("   Extracted patterns:");
   for (const [key, value] of Object.entries(patterns)) {
     if (value) console.log(`   • ${key}: ${value}`);
   }
-
   return {
     projectPatterns: patterns,
     tokenUsage: makeTokenDelta("patternExtractor", result.tokens),

@@ -1,46 +1,6 @@
-/**
- * graphRunner.js — The Bridge Between LangGraph and WebSocket
- * 
- * FIRST PRINCIPLES:
- * The core problem: graph.stream() is an async iterator that yields
- * node-by-node updates. We need to:
- * 1. Pipe each update to the WebSocket (so frontend sees real-time progress)
- * 2. PAUSE when a human-input node runs (PM clarification, escalation)
- * 3. WAIT for the frontend to send the human's response via WebSocket
- * 4. RESUME the graph with that response
- * 
- * The trick: We DON'T use graph.stream() directly for human-in-the-loop.
- * Instead, we modify humanInput and humanEscalation nodes to use a
- * Promise-based "input bridge" — the node awaits a Promise, the WebSocket
- * handler resolves it when the user responds.
- * 
- * ARCHITECTURE:
- * 
- *   graph.stream()  ──yields──>  GraphRunner  ──emits──>  WebSocket  ──>  React
- *                                     ↑                       │
- *                                     │                       │
- *                               inputBridge             user responds
- *                            (Promise resolve)          via WebSocket
- */
-
 import { buildGraph, createCheckpointer } from "../../src/config/graph.js";
 import { initGemini } from "../../src/utils/gemini.js";
-
-/**
- * Active project runs — maps projectId to run context
- * Each entry holds the abort controller, input bridge, and metadata
- */
 const activeRuns = new Map();
-
-/**
- * InputBridge — The mechanism for human-in-the-loop over WebSocket
- * 
- * When a human-input node needs user response:
- * 1. Node calls inputBridge.waitForInput(type, payload)
- * 2. This creates a Promise and stores the resolver
- * 3. The WebSocket handler calls inputBridge.provideInput(data)
- * 4. Promise resolves, node continues
- */
 class InputBridge {
   constructor() {
     this._resolver = null;
@@ -48,20 +8,12 @@ class InputBridge {
     this._pendingPayload = null;
     this._emitFn = null; // Set by graphRunner to emit WS events
   }
-
-  /** Set the emit function so bridge can notify the dashboard */
   setEmitFn(fn) {
     this._emitFn = fn;
   }
-
-  /**
-   * Called by human-input nodes when they need user response.
-   * ALSO emits a WebSocket event so the dashboard shows the input panel.
-   */
   waitForInput(type, payload) {
     this._pendingType = type;
     this._pendingPayload = payload;
-
     // Emit event to dashboard NOW (before waiting)
     if (this._emitFn) {
       this._emitFn({
@@ -73,15 +25,10 @@ class InputBridge {
         timestamp: Date.now(),
       });
     }
-
     return new Promise((resolve) => {
       this._resolver = resolve;
     });
   }
-
-  /**
-   * Called by WebSocket handler when user sends their response
-   */
   provideInput(data) {
     if (this._resolver) {
       const resolver = this._resolver;
@@ -91,60 +38,35 @@ class InputBridge {
       resolver(data);
     }
   }
-
   get isPending() {
     return this._resolver !== null;
   }
-
   get pendingType() {
     return this._pendingType;
   }
-
   get pendingPayload() {
     return this._pendingPayload;
   }
 }
-
-/**
- * Global input bridge registry — one per active project
- * Human-input nodes import this to check if they're running
- * in server mode vs CLI mode.
- */
 export const inputBridges = new Map();
-
-/**
- * Start a new project run
- * 
- * @param {string} projectId - Unique project/thread ID
- * @param {string} requirement - User's requirement text
- * @param {function} emit - Callback to send events (goes to WebSocket)
- * @param {object} options - { tokenBudget, resumeThreadId }
- * @returns {object} - { projectId, threadId }
- */
 export async function startProject(projectId, requirement, emit, options = {}) {
   const { tokenBudget = 2.0 } = options;
-
   // 1. Initialize Gemini if not already
   try {
     initGemini(process.env.GEMINI_API_KEY);
   } catch (e) {
     // Already initialized — ignore
   }
-
   // 2. Create checkpointer + graph
   const checkpointer = await createCheckpointer();
   const graph = buildGraph({ checkpointer });
-
   const threadId = projectId;
-
   // 3. Create input bridge for this project
   const inputBridge = new InputBridge();
   inputBridge.setEmitFn(emit); // Bridge can now emit WS events directly
   inputBridges.set(projectId, inputBridge);
-
   // 4. Create abort controller
   const abortController = new AbortController();
-
   // 5. Store run context
   activeRuns.set(projectId, {
     threadId,
@@ -154,13 +76,11 @@ export async function startProject(projectId, requirement, emit, options = {}) {
     status: "running",
     startedAt: Date.now(),
   });
-
   // 6. Config for LangGraph
   const config = {
     configurable: { thread_id: threadId },
     recursionLimit: 500,
   };
-
   // 7. Run in background (don't await — we stream events)
   _executeGraph(projectId, graph, config, requirement, tokenBudget, emit)
     .catch((error) => {
@@ -174,23 +94,18 @@ export async function startProject(projectId, requirement, emit, options = {}) {
       activeRuns.delete(projectId);
       inputBridges.delete(projectId);
     });
-
   return { projectId, threadId };
 }
-
 /**
  * Resume an existing project
  */
 export async function resumeProject(projectId, emit) {
   const checkpointer = await createCheckpointer();
   const graph = buildGraph({ checkpointer });
-
   const inputBridge = new InputBridge();
   inputBridge.setEmitFn(emit);
   inputBridges.set(projectId, inputBridge);
-
   const abortController = new AbortController();
-
   activeRuns.set(projectId, {
     threadId: projectId,
     inputBridge,
@@ -199,12 +114,10 @@ export async function resumeProject(projectId, emit) {
     status: "running",
     startedAt: Date.now(),
   });
-
   const config = {
     configurable: { thread_id: projectId },
     recursionLimit: 500,
   };
-
   _executeGraph(projectId, graph, config, null, null, emit)
     .catch((error) => {
       emit({ type: "error", message: error.message, timestamp: Date.now() });
@@ -213,10 +126,8 @@ export async function resumeProject(projectId, emit) {
       activeRuns.delete(projectId);
       inputBridges.delete(projectId);
     });
-
   return { projectId, threadId: projectId };
 }
-
 /**
  * Internal: Execute the graph and stream events
  * 
@@ -230,29 +141,24 @@ async function _executeGraph(projectId, graph, config, requirement, tokenBudget,
     projectId,
     timestamp: Date.now(),
   });
-
   const input = requirement
     ? { userRequirement: requirement, tokenBudget: tokenBudget || 2.0 }
     : null; // null for resume
-
   try {
     // stream() yields node-by-node updates
     const stream = await graph.stream(input, {
       ...config,
       streamMode: "updates",
     });
-
     for await (const event of stream) {
       // event shape: { nodeName: { ...partial state updates } }
       const nodeName = Object.keys(event)[0];
       const nodeOutput = event[nodeName];
-
       // Check abort
       if (activeRuns.get(projectId)?.abortController?.signal?.aborted) {
         emit({ type: "run_cancelled", projectId, timestamp: Date.now() });
         return;
       }
-
       // Emit node completion event
       emit({
         type: "node_complete",
@@ -260,21 +166,17 @@ async function _executeGraph(projectId, graph, config, requirement, tokenBudget,
         data: _sanitizeForTransport(nodeOutput),
         timestamp: Date.now(),
       });
-
       // Special handling: extract interesting state for the dashboard
       _emitDerivedEvents(nodeName, nodeOutput, emit);
     }
-
     // Stream finished — get final state
     const finalState = await graph.getState(config);
-
     emit({
       type: "run_complete",
       projectId,
       finalState: _sanitizeForTransport(finalState?.values || {}),
       timestamp: Date.now(),
     });
-
   } catch (error) {
     if (error.name === "AbortError") {
       emit({ type: "run_cancelled", projectId, timestamp: Date.now() });
@@ -287,7 +189,6 @@ async function _executeGraph(projectId, graph, config, requirement, tokenBudget,
         recoverable: !error.message?.includes("TOKEN_BUDGET_EXCEEDED"),
         timestamp: Date.now(),
       });
-
       // Try to get the current state for debugging
       try {
         const currentState = await graph.getState(config);
@@ -306,11 +207,6 @@ async function _executeGraph(projectId, graph, config, requirement, tokenBudget,
     }
   }
 }
-
-/**
- * Emit high-level events the dashboard cares about
- * (beyond raw node updates)
- */
 function _emitDerivedEvents(nodeName, output, emit) {
   // PM needs clarification → dashboard shows input panel
   if (output.pmStatus === "needs_clarification" && output.pmQuestions?.length) {
@@ -321,7 +217,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Spec ready
   if (output.clarifiedSpec) {
     emit({
@@ -330,7 +225,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Blueprint update
   if (output.blueprint) {
     emit({
@@ -339,7 +233,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Validation result
   if (output.blueprintValidation) {
     emit({
@@ -348,7 +241,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Task queue ready
   if (output.taskQueue?.phases?.length) {
     emit({
@@ -357,7 +249,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Sandbox created
   if (output.sandboxId) {
     emit({
@@ -367,7 +258,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Task progress
   if (output.currentTask) {
     emit({
@@ -376,7 +266,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   if (output.taskStatuses) {
     emit({
       type: "task_progress",
@@ -384,7 +273,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Coder output
   if (output.coderOutput) {
     emit({
@@ -393,7 +281,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Review result
   if (output.reviewResult?.verdict) {
     emit({
@@ -402,7 +289,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Execution result
   if (output.executionResult?.result) {
     emit({
@@ -411,7 +297,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Token update
   if (output.tokenUsage) {
     emit({
@@ -420,7 +305,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Phase change
   if (output.currentPhase) {
     emit({
@@ -429,7 +313,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
       timestamp: Date.now(),
     });
   }
-
   // Human escalation needed
   if (nodeName === "humanEscalation") {
     emit({
@@ -441,10 +324,6 @@ function _emitDerivedEvents(nodeName, output, emit) {
     });
   }
 }
-
-/**
- * Strip circular refs and large blobs before sending over WebSocket
- */
 function _sanitizeForTransport(obj) {
   try {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
@@ -458,10 +337,6 @@ function _sanitizeForTransport(obj) {
     return { error: "Could not serialize state" };
   }
 }
-
-/**
- * Provide human input to a waiting node
- */
 export function provideHumanInput(projectId, data) {
   const bridge = inputBridges.get(projectId);
   if (bridge?.isPending) {
@@ -470,10 +345,6 @@ export function provideHumanInput(projectId, data) {
   }
   return false;
 }
-
-/**
- * Cancel a running project
- */
 export function cancelProject(projectId) {
   const run = activeRuns.get(projectId);
   if (run) {
@@ -483,10 +354,6 @@ export function cancelProject(projectId) {
   }
   return false;
 }
-
-/**
- * Get status of a running project
- */
 export function getRunStatus(projectId) {
   const run = activeRuns.get(projectId);
   if (!run) return null;
@@ -499,10 +366,6 @@ export function getRunStatus(projectId) {
     inputType: run.inputBridge.pendingType,
   };
 }
-
-/**
- * Get all active runs
- */
 export function getActiveRuns() {
   const runs = [];
   for (const [id, run] of activeRuns) {

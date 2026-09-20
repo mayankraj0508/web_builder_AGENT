@@ -1,16 +1,6 @@
-/**
- * simplifyTask.js — Task Simplifier ⭐ V2 NEW
- * 
- * When the Coder fails 3 review cycles, the task is too complex.
- * Instead of infinite retries, we break it into 2-3 smaller tasks.
- */
-
 import { safeCallGemini, callGemini, makeTokenDelta, emptyTokenDelta } from "../utils/gemini.js";
-
 const SIMPLIFY_PROMPT = `You are analyzing a coding task that failed multiple times and needs to be broken into smaller pieces.
-
 Given the original task and the rejection reasons, create 2-3 simpler sub-tasks that together accomplish the same goal but are each simple enough to succeed individually.
-
 OUTPUT FORMAT (strict JSON):
 {
   "subTasks": [
@@ -26,14 +16,10 @@ OUTPUT FORMAT (strict JSON):
   ],
   "reason": "Why the original task was too complex"
 }`;
-
 export async function simplifyTaskNode(state) {
   console.log("\n✂️  [Simplify Task] Breaking complex task into simpler pieces...\n");
-
   const { currentTask, reviewResult } = state;
-
   const userPrompt = `FAILED TASK:\n${JSON.stringify(currentTask, null, 2)}\n\nREJECTION HISTORY:\n${JSON.stringify(reviewResult?.issues || [], null, 2)}`;
-
   const result = await safeCallGemini({
     systemPrompt: SIMPLIFY_PROMPT,
     userPrompt,
@@ -41,24 +27,18 @@ export async function simplifyTaskNode(state) {
     currentCost: state.tokenUsage?.estimatedCost || 0,
     tokenBudget: state.tokenBudget,
   });
-
-
   if (!result.ok) {
     console.error(`   [simplifyTask] LLM failed: ${result.error}`);
     return { error: `simplifyTask failed: ${result.error}`, tokenUsage: emptyTokenDelta("simplifyTask") };
   }
-
   const output = result.parsed;
   const subTasks = output.subTasks || [];
-
   console.log(`   ✂️ Split into ${subTasks.length} sub-tasks:`);
   subTasks.forEach(t => console.log(`   • ${t.taskId}: ${t.title}`));
   if (output.reason) console.log(`   💡 Reason: ${output.reason}`);
-
   // Mark original task as "simplified" and inject sub-tasks
   // The sub-tasks will be picked up by selectNextTask
   const newStatuses = { [currentTask.taskId]: "done" }; // Mark original as done
-
   // Insert sub-tasks into current phase of task queue
   const updatedQueue = { ...state.taskQueue };
   if (updatedQueue.phases) {
@@ -71,7 +51,6 @@ export async function simplifyTaskNode(state) {
       }
     }
   }
-
   return {
     taskQueue: updatedQueue,
     taskStatuses: newStatuses,

@@ -1,18 +1,7 @@
-/**
- * plannerAgent.js — Planner Agent
- * 
- * Now includes Phase 6: deployment (Dockerfiles + docker-compose)
- * so the generated project can run with: docker-compose up
- */
-
 import { safeCallGemini, callGemini, makeTokenDelta, emptyTokenDelta } from "../utils/gemini.js";
-
 const PLANNER_PROMPT = `You are the Planner Agent in an AI software development team.
-
 ROLE: Senior tech lead who creates the build plan.
-
 GOAL: Break the architecture blueprint into ordered coding tasks.
-
 MANDATORY PHASE ORDER:
 1. "setup" — Project scaffolding, DB connection file, environment config
 2. "models" — Database models/schemas (one task per entity)
@@ -21,7 +10,6 @@ MANDATORY PHASE ORDER:
 5. "frontend" — React pages + components (one task per page)
 6. "integration" — Wire frontend to backend, App.jsx routing, main entry points
 7. "deployment" — Dockerfiles for backend + frontend, docker-compose.yml, final README
-
 OUTPUT FORMAT (strict JSON):
 {
   "phases": [
@@ -46,7 +34,6 @@ OUTPUT FORMAT (strict JSON):
   "totalTasks": 18,
   "estimatedTotalTokens": 10000
 }
-
 RULES:
 - Each task creates 1-3 files max.
 - "filesNeeded" = files this task imports from (must exist from prior tasks).
@@ -56,7 +43,6 @@ RULES:
 - Phase 5 (frontend pages) tasks are parallelizable.
 - Give each task a unique taskId: "phaseName-N".
 - Keep task count 15-25 for a typical CRUD app.
-
 IMPORTANT — THESE FILES ALREADY EXIST (scaffolded automatically, do NOT create them):
 - backend/src/config/db.js (DB connection pool)
 - backend/src/middleware/auth.js (JWT auth middleware)
@@ -65,25 +51,18 @@ IMPORTANT — THESE FILES ALREADY EXIST (scaffolded automatically, do NOT create
 - frontend/src/index.css, frontend/tailwind.config.js, frontend/postcss.config.js, frontend/vite.config.js
 - frontend/src/utils/api.js (axios instance with auth interceptor)
 - .gitignore, all .env files
-
 So your Phase 1 (setup) should ONLY create files that are project-SPECIFIC:
 - Maybe a frontend AuthContext if auth is needed
 - Maybe backend utility helpers specific to this app
 - Do NOT recreate db.js, auth middleware, api.js, or config files.
-
 Phase 6 (integration): Do NOT create backend/src/index.js or frontend/src/App.jsx — they are AUTO-ASSEMBLED from the route and page files you create in earlier phases. If you need an integration task, use it for wiring specific features (e.g. a shared layout component, or connecting auth flow).
-
 Phase 7 (deployment): Include ONLY a README.md task. Docker files are auto-generated.
-
 - File paths should NOT start with / (use relative: "backend/src/..." not "/backend/src/...")
 - Backend models MUST use the file name format from the entity map: e.g., if entity.modelFile = "todoItem", the file is "backend/src/models/todoItem.js"
 - Backend routes MUST match: e.g., if entity.routeFile = "todoItemRoutes", file is "backend/src/routes/todoItemRoutes.js"`;
-
 export async function plannerAgentNode(state) {
   console.log("\n📋 [Planner Agent] Creating build plan...\n");
-
   const { blueprint, clarifiedSpec } = state;
-
   const blueprintSummary = {
     databaseType: blueprint.dbSchema?.databaseType,
     entities: blueprint.entities?.map(e => ({
@@ -113,7 +92,6 @@ export async function plannerAgentNode(state) {
     backendDeps: Object.keys(blueprint.dependencies?.backend?.dependencies || {}),
     frontendDeps: Object.keys(blueprint.dependencies?.frontend?.dependencies || {}),
   };
-
   const result = await safeCallGemini({
     systemPrompt: PLANNER_PROMPT,
     userPrompt: `App: ${clarifiedSpec.appName}\n\nBlueprint:\n${JSON.stringify(blueprintSummary, null, 2)}\n\nSpec:\n${JSON.stringify(clarifiedSpec, null, 2)}`,
@@ -121,19 +99,14 @@ export async function plannerAgentNode(state) {
     currentCost: state.tokenUsage?.estimatedCost || 0,
     tokenBudget: state.tokenBudget,
   });
-
-
   if (!result.ok) {
     console.error(`   [plannerAgent] LLM failed: ${result.error}`);
     return { error: `plannerAgent failed: ${result.error}`, tokenUsage: emptyTokenDelta("plannerAgent") };
   }
-
   const plan = result.parsed;
-
   console.log(`   📦 Total phases: ${plan.phases?.length || 0}`);
   console.log(`   📝 Total tasks: ${plan.totalTasks || "?"}`);
   console.log("");
-
   if (plan.phases) {
     for (const phase of plan.phases) {
       const parallelCount = phase.tasks?.filter(t => t.canParallelize).length || 0;
@@ -143,7 +116,6 @@ export async function plannerAgentNode(state) {
       });
     }
   }
-
   return {
     taskQueue: plan,
     currentPhaseIndex: 0,

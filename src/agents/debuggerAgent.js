@@ -1,25 +1,8 @@
-/**
- * debuggerAgent.js — Debugger Agent
- * 
- * FIRST PRINCIPLES:
- * Code failed. The Debugger's job is to figure out WHY and tell
- * the Coder HOW to fix it. Three-tier escalation:
- * 
- * Tier 1: Read the error + the failing file → suggest fix (3 attempts)
- * Tier 2: Read MORE project files for broader context (2 attempts)  
- * Tier 2.5: Rollback to last good snapshot, retry from scratch (1 attempt)
- * Tier 3: Give up, escalate to human
- */
-
 import { safeCallGemini, callGemini, makeTokenDelta, emptyTokenDelta } from "../utils/gemini.js";
 import { readFile, getFileList, rollback } from "../utils/sandboxManager.js";
-
 const DEBUGGER_PROMPT = `You are the Debugger Agent in an AI software development team.
-
 ROLE: Expert debugger who reads error messages and identifies root causes.
-
 GOAL: Analyze the error and provide a SPECIFIC fix that the Coder can implement.
-
 OUTPUT FORMAT (strict JSON):
 {
   "rootCause": "What exactly is wrong (1-2 lines)",
@@ -27,34 +10,27 @@ OUTPUT FORMAT (strict JSON):
   "affectedFiles": ["file1.js", "file2.js"],
   "confidence": "high | medium | low"
 }
-
 RULES:
 - Be SPECIFIC. Not "fix the import" but "change line 5 from 'import X from Y' to 'import { X } from Y'"
 - If the error is a missing dependency, say which package to install
 - If the error is in a different file than expected, identify which file
 - Read the error message carefully — the line number and file path tell you exactly where to look`;
-
 export async function debuggerAgentNode(state) {
   const debugState = state.debugState || { tier: 1, attempts: 0, maxAttempts: 3, rollbackAttempted: false };
   console.log(`\n🐛 [Debugger] Analyzing error (Tier ${debugState.tier}, Attempt ${debugState.attempts + 1})...\n`);
-
   const { currentTask, executionResult, sandboxId } = state;
   const errors = executionResult?.errors || "Unknown error";
-
   // Tier 2.5: Rollback attempt
   if (debugState.tier === 2 && debugState.attempts >= 2 && !debugState.rollbackAttempted) {
     console.log("   🔄 Tier 2.5: Attempting rollback to last good snapshot...");
-    
     // Find last successful task's tag
     const taskStatuses = state.taskStatuses || {};
     const doneTasks = Object.entries(taskStatuses)
       .filter(([_, status]) => status === "done")
       .map(([id]) => id);
-    
     if (doneTasks.length > 0) {
       const lastGoodTag = `v0.${doneTasks.length}.0`;
       const rbResult = rollback(sandboxId, lastGoodTag);
-      
       if (rbResult.success) {
         console.log(`   ✅ Rolled back to ${lastGoodTag}. Retrying task from scratch.`);
         return {
@@ -64,13 +40,11 @@ export async function debuggerAgentNode(state) {
         };
       }
     }
-    
     console.log("   ⚠️ Rollback failed or no good snapshots. Escalating to human.");
     return {
       debugState: { ...debugState, rollbackAttempted: true, tier: 3 },
     };
   }
-
   // Tier 3: Escalate to human
   if (debugState.tier >= 3 || (debugState.tier === 2 && debugState.attempts >= 2)) {
     console.log("   🆘 Escalating to human — debugger exhausted all options");
@@ -78,19 +52,16 @@ export async function debuggerAgentNode(state) {
       debugState: { ...debugState, tier: 3 },
     };
   }
-
   // Build context based on tier
   let contextFiles = "";
-
   // Tier 1: Only the failing files
   const failingFiles = currentTask?.filesToCreate || [];
   for (const filePath of failingFiles) {
     try {
       const content = readFile(sandboxId, filePath);
       if (content) contextFiles += `\n--- ${filePath} ---\n${content}\n`;
-    } catch (e) { /* file might not exist */ }
+    } catch (e) {  }
   }
-
   // Tier 2: Also read dependency files and nearby files
   if (debugState.tier >= 2) {
     const allFiles = getFileList(sandboxId);
@@ -100,7 +71,6 @@ export async function debuggerAgentNode(state) {
       const notAlreadyIncluded = !failingFiles.includes(f);
       return isJS && notNodeModules && notAlreadyIncluded;
     }).slice(0, 10); // Max 10 extra files
-
     for (const filePath of relatedFiles) {
       try {
         const content = readFile(sandboxId, filePath);
@@ -108,12 +78,10 @@ export async function debuggerAgentNode(state) {
           const truncated = content.split("\n").slice(0, 50).join("\n");
           contextFiles += `\n--- ${filePath} (context) ---\n${truncated}\n`;
         }
-      } catch (e) { /* skip */ }
+      } catch (e) {  }
     }
   }
-
   const userPrompt = `ERROR:\n${errors}\n\nTASK: ${currentTask?.title}\nFILES TO FIX: ${failingFiles.join(", ")}\n\nCODE:\n${contextFiles}`;
-
   const result = await safeCallGemini({
     systemPrompt: DEBUGGER_PROMPT,
     userPrompt,
@@ -121,23 +89,18 @@ export async function debuggerAgentNode(state) {
     currentCost: state.tokenUsage?.estimatedCost || 0,
     tokenBudget: state.tokenBudget,
   });
-
-
   if (!result.ok) {
     console.error(`   [debuggerAgent] LLM failed: ${result.error}`);
     return { error: `debuggerAgent failed: ${result.error}`, tokenUsage: emptyTokenDelta("debuggerAgent") };
   }
-
   const debug = result.parsed;
   console.log(`   🔍 Root cause: ${debug.rootCause}`);
   console.log(`   🔧 Fix: ${debug.fix}`);
   console.log(`   📊 Confidence: ${debug.confidence}`);
-
   // Promote to next tier if low confidence or multiple attempts
   const newAttempts = debugState.attempts + 1;
   const shouldPromoteTier = newAttempts >= debugState.maxAttempts || debug.confidence === "low";
   const newTier = shouldPromoteTier ? debugState.tier + 1 : debugState.tier;
-
   return {
     debugState: {
       tier: newTier,
@@ -154,10 +117,6 @@ export async function debuggerAgentNode(state) {
     tokenUsage: makeTokenDelta("debuggerAgent", result.tokens),
   };
 }
-
-/**
- * Router: if tier 3 → humanEscalation, else → contextBuilder (fresh context for retry)
- */
 export function debuggerRouter(state) {
   if (state.debugState?.tier >= 3) return "humanEscalation";
   return "contextBuilder";

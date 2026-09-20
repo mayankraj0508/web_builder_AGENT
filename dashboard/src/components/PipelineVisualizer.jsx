@@ -1,22 +1,12 @@
-/**
- * PipelineVisualizer.jsx
- * 
- * Horizontal phase blocks with node dots inside.
- * No emojis. Uses color coding: idle=dim, active=pulse, done=accent.
- */
-
 import useProjectStore, {
   PIPELINE_PHASES,
   NODE_LABELS,
 } from "../store/projectStore";
-
 export default function PipelineVisualizer() {
   const completedNodes = useProjectStore((s) => s.completedNodes);
   const activeNode = useProjectStore((s) => s.activeNode);
   const currentPhase = useProjectStore((s) => s.currentPhase);
-
   const phases = Object.entries(PIPELINE_PHASES);
-
   return (
     <div className="pipeline">
       <div className="pipeline-track">
@@ -28,11 +18,9 @@ export default function PipelineVisualizer() {
           const hasCompletedNode = phase.nodes.some((n) =>
             completedNodes.includes(n)
           );
-
           let phaseClass = "phase--idle";
           if (phaseCompleted) phaseClass = "phase--done";
           else if (isActivePhase || hasCompletedNode) phaseClass = "phase--active";
-
           return (
             <div key={phaseKey} className="pipeline-segment">
               <div className={`phase-block ${phaseClass}`}>
@@ -44,11 +32,9 @@ export default function PipelineVisualizer() {
                   {phase.nodes.map((nodeName) => {
                     const isActive = nodeName === activeNode;
                     const isDone = completedNodes.includes(nodeName);
-
                     let dotClass = "dot--idle";
                     if (isActive) dotClass = "dot--active";
                     else if (isDone) dotClass = "dot--done";
-
                     return (
                       <div
                         key={nodeName}

@@ -1,10 +1,3 @@
-/**
- * App.jsx — Mission Control Dashboard
- * 
- * Industrial dark UI. No emojis. Clean typography.
- * Layout: header -> requirement bar -> pipeline -> columns (log | output) -> token bar
- */
-
 import { useState, useCallback } from "react";
 import useProjectStore from "./store/projectStore";
 import useWebSocket from "./hooks/useWebSocket";
@@ -14,11 +7,9 @@ import LogStream from "./components/LogStream";
 import OutputPanel from "./components/OutputPanel";
 import HumanInputPanel from "./components/HumanInputPanel";
 import TokenBudgetBar from "./components/TokenBudgetBar";
-
 export default function App() {
   const [requirementInput, setRequirementInput] = useState("");
   const [isStarting, setIsStarting] = useState(false);
-
   const projectId = useProjectStore((s) => s.projectId);
   const requirement = useProjectStore((s) => s.requirement);
   const status = useProjectStore((s) => s.status);
@@ -28,9 +19,7 @@ export default function App() {
   const errorRecoverable = useProjectStore((s) => s.errorRecoverable);
   const setProject = useProjectStore((s) => s.setProject);
   const reset = useProjectStore((s) => s.reset);
-
   const { sendMessage, disconnect } = useWebSocket(projectId);
-
   const handleStart = useCallback(async () => {
     if (!requirementInput.trim()) return;
     setIsStarting(true);
@@ -44,7 +33,6 @@ export default function App() {
       setIsStarting(false);
     }
   }, [requirementInput, setProject]);
-
   const handleHumanResponse = useCallback(
     (data) => {
       sendMessage({ type: "human_response", data });
@@ -52,11 +40,9 @@ export default function App() {
     },
     [sendMessage]
   );
-
   const handleCancel = useCallback(() => {
     sendMessage({ type: "cancel" });
   }, [sendMessage]);
-
   const handleResume = useCallback(async () => {
     if (!projectId) return;
     try {
@@ -66,12 +52,10 @@ export default function App() {
       useProjectStore.setState({ status: "error", error: `Resume failed: ${e.message}` });
     }
   }, [projectId]);
-
   const handleNewProject = useCallback(() => {
     disconnect();
     reset();
   }, [disconnect, reset]);
-
   return (
     <div className="app">
       <header className="header">
@@ -95,7 +79,6 @@ export default function App() {
           )}
         </div>
       </header>
-
       <main className="main">
         {!projectId ? (
           <div className="landing">
@@ -182,7 +165,6 @@ export default function App() {
                 )}
               </div>
             </div>
-
             {status === "error" && error && (
               <div className="error-bar">
                 <span className="error-bar-label">ERROR</span>
@@ -192,9 +174,7 @@ export default function App() {
                 )}
               </div>
             )}
-
             <PipelineVisualizer />
-
             <div className="dashboard-grid">
               <div className="dashboard-col">
                 <LogStream />
@@ -203,14 +183,12 @@ export default function App() {
                 <OutputPanel />
               </div>
             </div>
-
             {humanInputRequest && (
               <HumanInputPanel
                 request={humanInputRequest}
                 onSubmit={handleHumanResponse}
               />
             )}
-
             <TokenBudgetBar />
           </div>
         )}

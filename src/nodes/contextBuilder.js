@@ -1,36 +1,17 @@
-/**
- * contextBuilder.js — Smart Context Builder (v2)
- * 
- * FIXES:
- * 1. Three-tier dependency lookup: exact → fuzzy → disk fallback
- * 2. Auto-include by convention: routes get models+middleware, pages get api util+context
- * 3. Reads ALL registry entries for the relevant directories
- * 4. Never sends empty dependency context — always finds something
- */
-
 import { readFile, getFileList } from "../utils/sandboxManager.js";
-
-/**
- * Extract a basic interface from file content (no LLM needed)
- * Used as fallback when registry has no entry for a file.
- */
 function extractBasicInterface(content, filePath) {
   const exports = [];
   const lines = content.split("\n");
-  
   for (const line of lines) {
     // export function/const/class/default
     const namedMatch = line.match(/export\s+(?:async\s+)?(?:function|const|let|class)\s+(\w+)/);
     if (namedMatch) exports.push(namedMatch[1]);
-    
     const defaultMatch = line.match(/export\s+default\s+(?:function\s+)?(\w+)?/);
     if (defaultMatch && defaultMatch[1]) exports.push(`default:${defaultMatch[1]}`);
   }
-
   const hasDefault = exports.some(e => e.startsWith("default:"));
   const named = exports.filter(e => !e.startsWith("default:"));
   const defaultName = hasDefault ? exports.find(e => e.startsWith("default:")).split(":")[1] : null;
-
   // Build import statement
   let importStatement = "";
   const relPath = filePath; // Will be resolved by the coder based on its own location
@@ -41,7 +22,6 @@ function extractBasicInterface(content, filePath) {
   } else if (named.length > 0) {
     importStatement = `import { ${named.join(", ")} } from '${relPath}'`;
   }
-
   return {
     path: filePath,
     exports: [...named, ...(defaultName ? [defaultName] : [])],
@@ -49,17 +29,13 @@ function extractBasicInterface(content, filePath) {
     interface: exports.join(", ") || "unknown exports",
   };
 }
-
 export function contextBuilderNode(state) {
   console.log("\n[Context Builder] Assembling context for Coder...\n");
-
   const { currentTask, blueprint, fileRegistry, projectPatterns, sandboxId, clarifiedSpec, taskStatuses } = state;
-
   if (!currentTask) {
     console.log("   No current task");
     return { contextPackage: null };
   }
-
   const context = {
     task: {
       taskId: currentTask.taskId,
@@ -77,24 +53,18 @@ export function contextBuilderNode(state) {
     appName: clarifiedSpec?.appName || "app",
     authRequired: clarifiedSpec?.authRequired || false,
   };
-
   const registry = fileRegistry || [];
   const filesToCreate = currentTask.filesToCreate || [];
-
   // ─── 1. Resolve dependencies: 3-tier lookup ────────────
-
   const filesNeeded = currentTask.filesNeeded || [];
-  
   // Also auto-detect needed files by convention
   const autoNeeded = new Set(filesNeeded);
-  
   const isBackendRoute = filesToCreate.some(f => f.includes("routes") || f.includes("controllers"));
   const isBackendModel = filesToCreate.some(f => f.includes("models"));
   const isFrontendPage = filesToCreate.some(f => f.includes("pages") || f.includes("components"));
   const isIntegration = filesToCreate.some(f => 
     f.endsWith("index.js") || f.endsWith("App.jsx") || f.endsWith("server.js")
   );
-
   // Routes need: all models + middleware
   if (isBackendRoute) {
     registry.forEach(f => {
@@ -103,7 +73,6 @@ export function contextBuilderNode(state) {
       }
     });
   }
-
   // Pages need: api util + auth context + hooks
   if (isFrontendPage) {
     registry.forEach(f => {
@@ -112,7 +81,6 @@ export function contextBuilderNode(state) {
       }
     });
   }
-
   // Integration files need: everything in their domain
   if (isIntegration) {
     const isBackend = filesToCreate.some(f => f.includes("backend"));
@@ -122,15 +90,12 @@ export function contextBuilderNode(state) {
       if (isFrontend && f.path?.startsWith("frontend/")) autoNeeded.add(f.path);
     });
   }
-
   // Resolve each dependency with 3-tier lookup
   for (const filePath of autoNeeded) {
     // Don't include files we're about to create
     if (filesToCreate.includes(filePath)) continue;
-
     // Tier 1: Exact match in registry
     let entry = registry.find(f => f.path === filePath);
-    
     // Tier 2: Fuzzy match — same directory, similar name
     if (!entry) {
       const dir = filePath.split("/").slice(0, -1).join("/");
@@ -144,13 +109,11 @@ export function contextBuilderNode(state) {
         console.log(`   Fuzzy match: ${filePath} → ${entry.path}`);
       }
     }
-
     // Tier 3: Disk fallback — read the file directly
     if (!entry && sandboxId) {
       try {
         // Try exact path first
         let content = readFile(sandboxId, filePath);
-        
         // If not found, scan directory for similar file
         if (!content) {
           const allFiles = getFileList(sandboxId);
@@ -166,14 +129,12 @@ export function contextBuilderNode(state) {
             if (content) console.log(`   Disk fallback: ${filePath} → ${match}`);
           }
         }
-
         if (content) {
           entry = extractBasicInterface(content, filePath);
           console.log(`   Disk read: ${filePath} → ${entry.exports.length} exports`);
         }
       } catch (e) { /* file truly doesn't exist */ }
     }
-
     if (entry) {
       context.dependencyInterfaces[entry.path || filePath] = {
         importStatement: entry.importStatement,
@@ -182,9 +143,7 @@ export function contextBuilderNode(state) {
       };
     }
   }
-
   // ─── 2. Naming map from entities ──────────────────────
-
   if (blueprint?.entities) {
     context.namingMap = blueprint.entities.map(e => ({
       entity: e.name,
@@ -194,9 +153,7 @@ export function contextBuilderNode(state) {
       routeFile: e.routeFile,
     }));
   }
-
   // ─── 3. Filtered DB schema ────────────────────────────
-
   const isBackendTask = filesToCreate.some(f => f.includes("backend"));
   if (isBackendTask && blueprint?.dbSchema) {
     const taskText = `${currentTask.title} ${currentTask.description}`.toLowerCase();
@@ -211,9 +168,7 @@ export function contextBuilderNode(state) {
       tables: relevantTables?.length > 0 ? relevantTables : blueprint.dbSchema.tables,
     };
   }
-
   // ─── 4. Filtered API endpoints ────────────────────────
-
   const isFrontendTask = filesToCreate.some(f => f.includes("frontend"));
   if (isFrontendTask && blueprint?.apiEndpoints) {
     const taskText = `${currentTask.title} ${currentTask.description}`.toLowerCase();
@@ -225,9 +180,7 @@ export function contextBuilderNode(state) {
     const combined = [...new Set([...authEndpoints, ...relevantEndpoints])];
     context.apiEndpoints = combined.length > 0 ? combined : blueprint.apiEndpoints;
   }
-
   // ─── 5. Template file (completed similar file) ────────
-
   if (registry.length > 0) {
     const targetFile = filesToCreate[0] || "";
     let templateType = "";
@@ -235,7 +188,6 @@ export function contextBuilderNode(state) {
     else if (targetFile.includes("routes") || targetFile.includes("controllers")) templateType = "routes";
     else if (targetFile.includes("pages")) templateType = "pages";
     else if (targetFile.includes("components")) templateType = "components";
-
     if (templateType) {
       const templateEntry = registry.find(f =>
         f.path?.includes(templateType) && !filesToCreate.includes(f.path)
@@ -253,9 +205,7 @@ export function contextBuilderNode(state) {
       }
     }
   }
-
   // ─── Log context summary ──────────────────────────────
-
   const contextStr = JSON.stringify(context);
   const estimatedTokens = Math.ceil(contextStr.length / 4);
   console.log(`   Context size: ~${estimatedTokens} tokens`);
@@ -263,6 +213,5 @@ export function contextBuilderNode(state) {
   console.log(`   Dependencies: ${Object.keys(context.dependencyInterfaces).length} interfaces`);
   if (context.dbSchema) console.log(`   Schema: ${context.dbSchema.tables?.length} tables`);
   if (context.templateFile) console.log(`   Template: ${context.templateFile.path}`);
-
   return { contextPackage: context };
 }

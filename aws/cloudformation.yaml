@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'WebAI Multi-Agent Cloud Platform — AWS CloudFormation Deployment'
+Parameters:
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: 'Google Gemini API Key'
+  AwsBedrockModel:
+    Type: String
+    Default: 'anthropic.claude-3-5-sonnet-20240620-v1:0'
+    Description: 'AWS Bedrock LLM Model Identifier'
+Resources:
+  WebAIS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'webai-sandboxes-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+  WebAIAppRunnerService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: webai-platform
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: public.ecr.aws/docker/library/node:20-slim
+          ImageRepositoryType: PUBLIC
+          ImageConfiguration:
+            Port: "3000"
+            StartCommand: "npm run dev"
+            RuntimeEnvironmentVariables:
+              - Name: GEMINI_API_KEY
+                Value: !Ref GeminiApiKey
+              - Name: LLM_PROVIDER
+                Value: "bedrock"
+              - Name: AWS_BEDROCK_MODEL
+                Value: !Ref AwsBedrockModel
+              - Name: AWS_S3_BUCKET_NAME
+                Value: !Ref WebAIS3Bucket
+Outputs:
+  ServiceUrl:
+    Description: 'Live AWS App Runner WebAI Dashboard URL'
+    Value: !GetAtt WebAIAppRunnerService.ServiceUrl
+  S3BucketName:
+    Description: 'Amazon S3 Sandbox Bucket'
+    Value: !Ref WebAIS3Bucket

@@ -1,11 +1,5 @@
-/**
- * LogStream.jsx — Real-time Event Log
- * No emojis. Monospace terminal style. Color-coded by event type.
- */
-
 import { useEffect, useRef } from "react";
 import useProjectStore, { NODE_LABELS } from "../store/projectStore";
-
 const EVENT_LABELS = {
   run_started: "INIT",
   node_complete: "NODE",
@@ -28,7 +22,6 @@ const EVENT_LABELS = {
   ack: "ACK",
   status: "STATUS",
 };
-
 function formatTime(ts) {
   if (!ts) return "--:--:--";
   return new Date(ts).toLocaleTimeString("en-US", {
@@ -38,7 +31,6 @@ function formatTime(ts) {
     second: "2-digit",
   });
 }
-
 function getEventDetail(event) {
   switch (event.type) {
     case "node_complete":
@@ -63,17 +55,14 @@ function getEventDetail(event) {
       return "";
   }
 }
-
 export default function LogStream() {
   const events = useProjectStore((s) => s.events);
   const scrollRef = useRef(null);
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [events.length]);
-
   return (
     <div className="panel log-panel">
       <div className="panel-head">
@@ -91,7 +80,6 @@ export default function LogStream() {
             const isError = event.type === "error" || event.type === "run_cancelled";
             const isSuccess = event.type === "run_complete" || event.type === "node_complete";
             const isInput = event.type === "human_input_needed";
-
             return (
               <div
                 key={i}
