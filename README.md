@@ -108,6 +108,14 @@ WebAI transforms high-level prompts into fully realized, multi-tier software app
 
 ---
 
+## 🤖 AI Platforms Used
+
+- **Google AI Studio**: Primary LLM API platform for Gemini model generation (`gemini-3.6-flash`, `gemini-3.5-flash-lite`).
+- **Antigravity**: Agentic AI pair programming and workspace orchestration engine.
+- **Codex**: Intelligent code generation and synthesis capabilities.
+
+---
+
 ## 🛠️ Technology Stack
 
 - **AI Runtimes**: Google Gemini 3 (`@google/genai`), AWS Open-Source SDK (`@aws-sdk/client-bedrock-runtime`, `@aws-sdk/client-s3`)
